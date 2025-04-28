@@ -1,6 +1,6 @@
 -- @Author taakefyrsten
 -- https://next.nexusmods.com/profile/taakefyrsten
--- Version 1.0
+-- Version 1.1
 
 -- INIT ------------------------------------
 local shouldSkipPad = true
@@ -11,7 +11,7 @@ local type_cGUIShortcutPadControl = sdk.find_type_definition("app.cGUIShortcutPa
 
 
 -- SETTINGS --------------------------------
-local settings = {
+local config = {
     Enable = true,  -- Toggle mod
 }
 
@@ -21,29 +21,29 @@ local function debug(msg)
 end
 
 
-local function save_settings()
-    json.dump_file("radial_disable.json", settings)
+local function save_config()
+    json.dump_file("radial_disable.json", config)
 end
 
-local function load_settings()
+local function load_config()
     if loadedTable == nil then
         loadedTable= json.load_file("radial_disable.json")
     end 
     if loadedTable then
-        settings = loadedTable
-        if settings.Enable == nil then
-            settings.Enable = 1
+        config = loadedTable
+        if config.Enable == nil then
+            config.Enable = 1
         end
     else
-        save_settings()
+        save_config()
     end
 end
 
-load_settings()
+load_config()
 
 
 local function disableGUI020008(args)
-    if settings.Enable == true then
+    if config.Enable == true then
        shouldSkipPad = true
        return sdk.PreHookResult.SKIP_ORIGINAL 
     end
@@ -51,43 +51,49 @@ local function disableGUI020008(args)
 end
 
 local function skipPadInput(args)
-    if settings.Enable == true and shouldSkipPad == true then 
-            return sdk.PreHookResult.SKIP_ORIGINAL
+    if config.Enable == true and shouldSkipPad == true then 
+        debug('SKIPPING PAD')
+        return sdk.PreHookResult.SKIP_ORIGINAL
     end
 end
 
 
 
 -- HOOKS --------------------------------
-if type_GUI020008 then
-    sdk.hook(type_GUI020008:get_method('guiHudVisibleUpdate'), disableGUI020008, nil)
-    sdk.hook(type_GUI020008:get_method('guiHudUpdate'), disableGUI020008, nil)
+if config.Enable == true then
+    if type_GUI020008 then
+        --sdk.hook(type_GUI020008:get_method('onOpenApp'), disableGUI020008, nil)
+        sdk.hook(type_GUI020008:get_method('guiHudUpdate'), disableGUI020008, nil)
+        sdk.hook(type_GUI020008:get_method('guiHudVisibleUpdate'), disableGUI020008, nil)
+        sdk.hook(type_GUI020008:get_method('checkOpen'), disableGUI020008, function(retval) return false end)
+    
+    end
+
+    -- Dont skip pad in customize radial menu
+    if type_GUI030208 then
+        sdk.hook(
+            type_GUI030208:get_method("guiVisibleUpdate"),
+            function(args)
+                shouldSkipPad = false
+            end,
+            nil
+        )
+    end
+
+    -- Skip pad control if HUD is closed
+    if type_cGUIShortcutPadControl then
+        sdk.hook(type_cGUIShortcutPadControl:get_method("move(System.Single, via.vec2)"), skipPadInput, nil)
+    end
 end
 
--- Dont skip pad in customize radial menu
-if type_GUI030208 then
-    sdk.hook(
-        type_GUI030208:get_method("guiVisibleUpdate"),
-        function(args)
-            shouldSkipPad = false
-        end,
-        nil
-    )
-end
 
--- Skip pad control if HUD is closed
-if type_cGUIShortcutPadControl then
-    sdk.hook(type_cGUIShortcutPadControl:get_method("move(System.Single, via.vec2)"), skipPadInput, nil)
-end
-
-
--- reFramework settings ----------------------------
+-- reFramework config ----------------------------
 re.on_draw_ui(function()
     if imgui.tree_node("Radial disable") then
-        if imgui.checkbox("Enable", settings.Enable) then
-            settings.Enable = not settings.Enable
-            save_settings()
-            load_settings()
+        if imgui.checkbox("Enable", config.Enable) then
+            config.Enable = not config.Enable
+            save_config()
+            load_config()
         end
         imgui.tree_pop()
     end
